@@ -16,11 +16,43 @@ jobs:
           distribution: temurin
           java-version: 21
       - run: npm install
+      - name: Make app icon
+        run: |
+          pip install pillow
+          python3 - <<'PY'
+          from PIL import Image, ImageDraw
+          import os
+          os.makedirs('assets', exist_ok=True)
+          S = 1024
+          bg = (12, 47, 46, 255)
+          gold = (216, 178, 90, 255)
+          def fg():
+              im = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+              d = ImageDraw.Draw(im)
+              d.ellipse((S*0.30, S*0.30, S*0.70, S*0.70), fill=gold)
+              d.ellipse((S*0.39, S*0.26, S*0.77, S*0.64), fill=(0, 0, 0, 0))
+              d.ellipse((S*0.62, S*0.40, S*0.67, S*0.45), fill=gold)
+              return im
+          Image.new('RGBA', (S, S), bg).save('assets/icon-background.png')
+          f = fg(); f.save('assets/icon-foreground.png')
+          o = Image.new('RGBA', (S, S), bg); o.alpha_composite(f); o.save('assets/icon-only.png')
+          PY
       - run: npx cap add android
+      - name: Generate Android icons
+        run: |
+          npm i -D @capacitor/assets
+          npx capacitor-assets generate --android || echo "icons skipped"
       - name: Add permissions
         run: |
-          sed -i 's#<application#<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/><uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/><uses-permission android:name="android.permission.POST_NOTIFICATIONS"/><uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/><application#' android/app/src/main/AndroidManifest.xml
+          sed -i 's#<application#<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/><uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/><uses-permission android:name="android.permission.POST_NOTIFICATIONS"/><uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/><uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/><uses-permission android:name="android.permission.VIBRATE"/><application#' android/app/src/main/AndroidManifest.xml
+      - name: Add adhan sound if azan.mp3 exists
+        run: |
+          if [ -f azan.mp3 ]; then mkdir -p android/app/src/main/res/raw && cp azan.mp3 android/app/src/main/res/raw/azan.mp3; fi
       - run: npx cap sync android
+      - name: Use fixed signing key (so updates install over old versions)
+        run: |
+          mkdir -p ~/.android
+          if [ -f debug.keystore ]; then cp debug.keystore ~/.android/debug.keystore; fi
       - run: cd android && chmod +x gradlew && ./gradlew assembleDebug
       - uses: actions/upload-artifact@v4
         with:
